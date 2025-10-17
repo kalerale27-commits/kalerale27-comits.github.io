@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Dodger Shooter</title>
+  <title>Space Dodger - Gun Upgrade Edition</title>
   <style>
     body {
       margin: 0;
@@ -13,7 +13,6 @@
     canvas {
       display: block;
       margin: 0 auto;
-      background: black;
     }
 
     #score {
@@ -38,52 +37,84 @@
       border-radius: 5px;
       cursor: pointer;
     }
+
+    #upgradeMenu {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-family: Arial;
+      z-index: 2;
+    }
+
+    #upgradeMenu h2 {
+      margin-top: 0;
+    }
+
+    .upgrade-button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #222;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="score">Score: 0</div>
-  <button id="restartBtn">Restart Game</button>
   <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+  <div id="upgradeMenu">
+    <h2>Upgrade Shop</h2>
+    <p>You scored <span id="finalScore">0</span> points</p>
+    <p>Select your weapon:</p>
+    <button class="upgrade-button" onclick="selectWeapon('basic')">🔫 Basic Blaster (Free)</button><br>
+    <button class="upgrade-button" onclick="selectWeapon('shotgun')">💥 Shotgun (20 points)</button><br>
+    <button class="upgrade-button" onclick="selectWeapon('laser')">🔥 Laser Gun (30 points)</button>
+  </div>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
     const spaceshipImg = new Image();
-    spaceshipImg.src = "spaceship.png"; // Make sure this is in the same folder
+    spaceshipImg.src = "spaceship.png";
 
     const keys = {};
     window.addEventListener("keydown", e => keys[e.key] = true);
     window.addEventListener("keyup", e => keys[e.key] = false);
 
-    const restartBtn = document.getElementById("restartBtn");
-    restartBtn.addEventListener("click", () => {
-      restartBtn.style.display = "none";
-      resetGame();
-    });
-
-    let player, bullets, enemies, score, lives, gameOver, stars, playerShots, frame;
+    let weapon = "basic";
+    let score = 0;
+    let playerShots = [];
+    let enemies = [];
+    let stars = [];
+    let lives = 3;
+    let player;
+    let gameOver = false;
+    let frame = 0;
 
     function resetGame() {
       player = {
         x: 50,
-        y: canvas.height / 2 - 20,
+        y: canvas.height / 2,
         width: 40,
         height: 40,
         speed: 4,
-        lives: 3,
         canShoot: true,
-        shootCooldown: 250
+        shootCooldown: 300
       };
 
-      bullets = [];
-      enemies = [];
       playerShots = [];
-      score = 0;
-      lives = 3;
-      gameOver = false;
-      frame = 0;
-
+      enemies = [];
       stars = Array.from({ length: 100 }, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
@@ -91,7 +122,13 @@
         speed: 0.5 + Math.random()
       }));
 
+      gameOver = false;
+      frame = 0;
+      score = 0;
+      lives = 3;
+
       document.getElementById("score").textContent = "Score: 0";
+      document.getElementById("upgradeMenu").style.display = "none";
       requestAnimationFrame(gameLoop);
     }
 
@@ -119,23 +156,33 @@
       player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
 
       if ((keys[" "] || keys["Spacebar"]) && player.canShoot) {
-        playerShots.push({
-          x: player.x + player.width,
-          y: player.y + player.height / 2 - 2,
-          width: 10,
-          height: 4,
-          speed: 6
-        });
+        shoot();
         player.canShoot = false;
         setTimeout(() => { player.canShoot = true; }, player.shootCooldown);
       }
     }
 
-    function drawPlayer() {
-      ctx.drawImage(spaceshipImg, player.x, player.y, player.width, player.height);
+    function shoot() {
+      switch (weapon) {
+        case "basic":
+          playerShots.push(createBullet(player.x + player.width, player.y + player.height / 2 - 2, 10, 4, 6));
+          break;
+        case "shotgun":
+          for (let i = -1; i <= 1; i++) {
+            playerShots.push(createBullet(player.x + player.width, player.y + player.height / 2 - 2 + i * 5, 10, 4, 6));
+          }
+          break;
+        case "laser":
+          playerShots.push(createBullet(player.x + player.width, player.y + player.height / 2 - 1, 12, 2, 10, "cyan"));
+          break;
+      }
     }
 
-    function updatePlayerShots() {
+    function createBullet(x, y, w, h, speed, color = "lime") {
+      return { x, y, width: w, height: h, speed, color };
+    }
+
+    function updateShots() {
       playerShots.forEach(s => s.x += s.speed);
       playerShots = playerShots.filter(s => s.x < canvas.width);
 
@@ -156,9 +203,9 @@
       });
     }
 
-    function drawPlayerShots() {
-      ctx.fillStyle = "lime";
+    function drawShots() {
       playerShots.forEach(s => {
+        ctx.fillStyle = s.color;
         ctx.fillRect(s.x, s.y, s.width, s.height);
       });
     }
@@ -173,12 +220,18 @@
       });
     }
 
+    function drawEnemies() {
+      ctx.fillStyle = "red";
+      enemies.forEach(e => {
+        ctx.fillRect(e.x, e.y, e.width, e.height);
+      });
+    }
+
     function updateEnemies() {
-      enemies.forEach(e => { e.x -= e.speed; });
+      enemies.forEach(e => e.x -= e.speed);
 
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-
         if (e.x + e.width < 0) enemies.splice(i, 1);
 
         if (
@@ -190,18 +243,14 @@
           enemies.splice(i, 1);
           lives--;
           if (lives <= 0) {
-            gameOver = true;
-            restartBtn.style.display = "block";
+            showUpgradeMenu();
           }
         }
       }
     }
 
-    function drawEnemies() {
-      ctx.fillStyle = "red";
-      enemies.forEach(e => {
-        ctx.fillRect(e.x, e.y, e.width, e.height);
-      });
+    function drawPlayer() {
+      ctx.drawImage(spaceshipImg, player.x, player.y, player.width, player.height);
     }
 
     function drawUI() {
@@ -210,29 +259,36 @@
       ctx.fillText("Lives: " + lives, canvas.width - 100, 20);
     }
 
+    function showUpgradeMenu() {
+      gameOver = true;
+      document.getElementById("finalScore").textContent = score;
+      document.getElementById("upgradeMenu").style.display = "block";
+    }
+
+    function selectWeapon(selected) {
+      if (selected === "shotgun" && score < 20) return alert("Not enough points!");
+      if (selected === "laser" && score < 30) return alert("Not enough points!");
+
+      weapon = selected;
+      resetGame();
+    }
+
     function gameLoop() {
-      if (gameOver) {
-        ctx.fillStyle = "white";
-        ctx.font = "36px Arial";
-        ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
-        return;
-      }
+      if (gameOver) return;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStars();
       updatePlayer();
-      updatePlayerShots();
+      updateShots();
       updateEnemies();
 
       drawPlayer();
-      drawPlayerShots();
+      drawShots();
       drawEnemies();
       drawUI();
 
       frame++;
-      if (frame % 60 === 0) {
-        spawnEnemy();
-      }
+      if (frame % 60 === 0) spawnEnemy();
 
       requestAnimationFrame(gameLoop);
     }
