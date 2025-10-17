@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Space Dodger</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+    }
+    #score {
+      color: white;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-family: Arial;
+      font-size: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let spaceship = {
+      x: 50,
+      y: canvas.height / 2 - 20,
+      width: 40,
+      height: 40,
+      speed: 5
+    };
+
+    let keys = {};
+    document.addEventListener("keydown", (e) => keys[e.key] = true);
+    document.addEventListener("keyup", (e) => keys[e.key] = false);
+
+    let asteroids = [];
+    let score = 0;
+    let gameOver = false;
+
+    function drawSpaceship() {
+      ctx.fillStyle = "cyan";
+      ctx.fillRect(spaceship.x, spaceship.y, spaceship.width, spaceship.height);
+    }
+
+    function drawAsteroids() {
+      ctx.fillStyle = "gray";
+      asteroids.forEach(asteroid => {
+        ctx.beginPath();
+        ctx.arc(asteroid.x, asteroid.y, asteroid.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function updateSpaceship() {
+      if (keys["ArrowUp"] || keys["w"]) spaceship.y -= spaceship.speed;
+      if (keys["ArrowDown"] || keys["s"]) spaceship.y += spaceship.speed;
+      if (keys["ArrowLeft"] || keys["a"]) spaceship.x -= spaceship.speed;
+      if (keys["ArrowRight"] || keys["d"]) spaceship.x += spaceship.speed;
+
+      // Clamp within canvas
+      spaceship.x = Math.max(0, Math.min(canvas.width - spaceship.width, spaceship.x));
+      spaceship.y = Math.max(0, Math.min(canvas.height - spaceship.height, spaceship.y));
+    }
+
+    function spawnAsteroid() {
+      let y = Math.random() * canvas.height;
+      let radius = 10 + Math.random() * 20;
+      asteroids.push({
+        x: canvas.width + radius,
+        y: y,
+        radius: radius,
+        speed: 2 + Math.random() * 3
+      });
+    }
+
+    function updateAsteroids() {
+      for (let i = asteroids.length - 1; i >= 0; i--) {
+        asteroids[i].x -= asteroids[i].speed;
+
+        // Collision detection
+        let dx = asteroids[i].x - (spaceship.x + spaceship.width / 2);
+        let dy = asteroids[i].y - (spaceship.y + spaceship.height / 2);
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < asteroids[i].radius + spaceship.width / 2) {
+          gameOver = true;
+        }
+
+        if (asteroids[i].x < -asteroids[i].radius) {
+          asteroids.splice(i, 1);
+        }
+      }
+    }
+
+    function drawGameOver() {
+      ctx.fillStyle = "red";
+      ctx.font = "40px Arial";
+      ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
+    }
+
+    function updateScore() {
+      score++;
+      document.getElementById("score").innerText = "Score: " + score;
+    }
+
+    let spawnTimer = 0;
+    function gameLoop() {
+      if (gameOver) {
+        drawGameOver();
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      updateSpaceship();
+      updateAsteroids();
+
+      drawSpaceship();
+      drawAsteroids();
+
+      spawnTimer++;
+      if (spawnTimer % 30 === 0) {
+        spawnAsteroid();
+      }
+
+      if (spawnTimer % 10 === 0) {
+        updateScore();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
