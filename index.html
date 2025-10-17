@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Shooter</title>
+  <title>Space Dodger Shooter</title>
   <style>
     body {
       margin: 0;
@@ -50,7 +50,7 @@
     const ctx = canvas.getContext("2d");
 
     const spaceshipImg = new Image();
-    spaceshipImg.src = "spaceship.png";
+    spaceshipImg.src = "spaceship.png"; // Make sure this is in the same folder
 
     const keys = {};
     window.addEventListener("keydown", e => keys[e.key] = true);
@@ -62,7 +62,7 @@
       resetGame();
     });
 
-    let player, bullets, enemies, score, lives, gameOver, stars, playerProjectiles;
+    let player, bullets, enemies, score, lives, gameOver, stars, playerShots, frame;
 
     function resetGame() {
       player = {
@@ -73,24 +73,25 @@
         speed: 4,
         lives: 3,
         canShoot: true,
-        shootCooldown: 300,
+        shootCooldown: 250
       };
 
       bullets = [];
       enemies = [];
-      playerProjectiles = [];
+      playerShots = [];
       score = 0;
       lives = 3;
       gameOver = false;
+      frame = 0;
 
       stars = Array.from({ length: 100 }, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
         size: Math.random() * 2,
-        speed: 0.5 + Math.random() * 1
+        speed: 0.5 + Math.random()
       }));
 
-      document.getElementById("score").textContent = "Score: " + score;
+      document.getElementById("score").textContent = "Score: 0";
       requestAnimationFrame(gameLoop);
     }
 
@@ -117,9 +118,14 @@
       player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
       player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
 
-      // Space to shoot
       if ((keys[" "] || keys["Spacebar"]) && player.canShoot) {
-        shoot();
+        playerShots.push({
+          x: player.x + player.width,
+          y: player.y + player.height / 2 - 2,
+          width: 10,
+          height: 4,
+          speed: 6
+        });
         player.canShoot = false;
         setTimeout(() => { player.canShoot = true; }, player.shootCooldown);
       }
@@ -129,46 +135,32 @@
       ctx.drawImage(spaceshipImg, player.x, player.y, player.width, player.height);
     }
 
-    function shoot() {
-      playerProjectiles.push({
-        x: player.x + player.width,
-        y: player.y + player.height / 2 - 2,
-        width: 10,
-        height: 4,
-        speed: 6
-      });
-    }
+    function updatePlayerShots() {
+      playerShots.forEach(s => s.x += s.speed);
+      playerShots = playerShots.filter(s => s.x < canvas.width);
 
-    function drawPlayerBullets() {
-      ctx.fillStyle = "lime";
-      playerProjectiles.forEach(b => {
-        ctx.fillRect(b.x, b.y, b.width, b.height);
-      });
-    }
-
-    function updatePlayerBullets() {
-      playerProjectiles.forEach(b => { b.x += b.speed; });
-      playerProjectiles = playerProjectiles.filter(b => b.x < canvas.width);
-
-      // Collision with enemies
-      for (let i = enemies.length - 1; i >= 0; i--) {
-        for (let j = playerProjectiles.length - 1; j >= 0; j--) {
-          const e = enemies[i];
-          const b = playerProjectiles[j];
+      enemies.forEach((enemy, ei) => {
+        playerShots.forEach((s, si) => {
           if (
-            b.x < e.x + e.width &&
-            b.x + b.width > e.x &&
-            b.y < e.y + e.height &&
-            b.y + b.height > e.y
+            s.x < enemy.x + enemy.width &&
+            s.x + s.width > enemy.x &&
+            s.y < enemy.y + enemy.height &&
+            s.y + s.height > enemy.y
           ) {
-            enemies.splice(i, 1);
-            playerProjectiles.splice(j, 1);
+            enemies.splice(ei, 1);
+            playerShots.splice(si, 1);
             score += 10;
             document.getElementById("score").textContent = "Score: " + score;
-            break;
           }
-        }
-      }
+        });
+      });
+    }
+
+    function drawPlayerShots() {
+      ctx.fillStyle = "lime";
+      playerShots.forEach(s => {
+        ctx.fillRect(s.x, s.y, s.width, s.height);
+      });
     }
 
     function spawnEnemy() {
@@ -181,19 +173,13 @@
       });
     }
 
-    function drawEnemies() {
-      ctx.fillStyle = "red";
-      enemies.forEach(e => {
-        ctx.fillRect(e.x, e.y, e.width, e.height);
-      });
-    }
-
     function updateEnemies() {
       enemies.forEach(e => { e.x -= e.speed; });
 
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-        if (e.x + e.width < 0) enemies.splice(i, 1); // off screen
+
+        if (e.x + e.width < 0) enemies.splice(i, 1);
 
         if (
           e.x < player.x + player.width &&
@@ -209,6 +195,13 @@
           }
         }
       }
+    }
+
+    function drawEnemies() {
+      ctx.fillStyle = "red";
+      enemies.forEach(e => {
+        ctx.fillRect(e.x, e.y, e.width, e.height);
+      });
     }
 
     function drawUI() {
@@ -228,16 +221,15 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStars();
       updatePlayer();
+      updatePlayerShots();
       updateEnemies();
-      updatePlayerBullets();
 
       drawPlayer();
+      drawPlayerShots();
       drawEnemies();
-      drawPlayerBullets();
       drawUI();
 
       frame++;
-
       if (frame % 60 === 0) {
         spawnEnemy();
       }
@@ -245,7 +237,6 @@
       requestAnimationFrame(gameLoop);
     }
 
-    let frame = 0;
     spaceshipImg.onload = () => {
       resetGame();
     };
