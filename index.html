@@ -2,17 +2,18 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Dodger</title>
+  <title>Space Shooter</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
-      background: black;
+      background-color: black;
     }
 
     canvas {
       display: block;
       margin: 0 auto;
+      background: black;
     }
 
     #score {
@@ -32,36 +33,26 @@
       transform: translate(-50%, -50%);
       padding: 10px 20px;
       font-size: 20px;
-      background: white;
+      background-color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
-      z-index: 1;
     }
   </style>
 </head>
 <body>
   <div id="score">Score: 0</div>
   <button id="restartBtn">Restart Game</button>
-  <canvas id="gameCanvas" width="600" height="400"></canvas>
+  <canvas id="gameCanvas" width="800" height="500"></canvas>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
     const spaceshipImg = new Image();
-    spaceshipImg.src = "spaceship.png"; // Make sure this image is in the same folder
-
-    // Game objects
-    let spaceship;
-    let bullets = [];
-    let stars = [];
-    let score = 0;
-    let lives = 3;
-    let gameOver = false;
+    spaceshipImg.src = "spaceship.png";
 
     const keys = {};
-
     window.addEventListener("keydown", e => keys[e.key] = true);
     window.addEventListener("keyup", e => keys[e.key] = false);
 
@@ -71,16 +62,27 @@
       resetGame();
     });
 
+    let player, bullets, enemies, score, lives, gameOver, stars, playerProjectiles;
+
     function resetGame() {
-      spaceship = {
+      player = {
         x: 50,
         y: canvas.height / 2 - 20,
         width: 40,
         height: 40,
-        speed: 4
+        speed: 4,
+        lives: 3,
+        canShoot: true,
+        shootCooldown: 300,
       };
 
       bullets = [];
+      enemies = [];
+      playerProjectiles = [];
+      score = 0;
+      lives = 3;
+      gameOver = false;
+
       stars = Array.from({ length: 100 }, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
@@ -88,12 +90,7 @@
         speed: 0.5 + Math.random() * 1
       }));
 
-      score = 0;
-      lives = 3;
-      gameOver = false;
-
-      document.getElementById("score").innerText = "Score: 0";
-
+      document.getElementById("score").textContent = "Score: " + score;
       requestAnimationFrame(gameLoop);
     }
 
@@ -111,108 +108,144 @@
       });
     }
 
-    function updateSpaceship() {
-      if (keys["ArrowUp"] || keys["w"]) spaceship.y -= spaceship.speed;
-      if (keys["ArrowDown"] || keys["s"]) spaceship.y += spaceship.speed;
-      if (keys["ArrowLeft"] || keys["a"]) spaceship.x -= spaceship.speed;
-      if (keys["ArrowRight"] || keys["d"]) spaceship.x += spaceship.speed;
+    function updatePlayer() {
+      if (keys["ArrowUp"] || keys["w"]) player.y -= player.speed;
+      if (keys["ArrowDown"] || keys["s"]) player.y += player.speed;
+      if (keys["ArrowLeft"] || keys["a"]) player.x -= player.speed;
+      if (keys["ArrowRight"] || keys["d"]) player.x += player.speed;
 
-      // Clamp to canvas
-      spaceship.x = Math.max(0, Math.min(spaceship.x, canvas.width - spaceship.width));
-      spaceship.y = Math.max(0, Math.min(spaceship.y, canvas.height - spaceship.height));
+      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+      player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+      // Space to shoot
+      if ((keys[" "] || keys["Spacebar"]) && player.canShoot) {
+        shoot();
+        player.canShoot = false;
+        setTimeout(() => { player.canShoot = true; }, player.shootCooldown);
+      }
     }
 
-    function drawSpaceship() {
-      ctx.drawImage(spaceshipImg, spaceship.x, spaceship.y, spaceship.width, spaceship.height);
+    function drawPlayer() {
+      ctx.drawImage(spaceshipImg, player.x, player.y, player.width, player.height);
     }
 
-    function spawnBullet() {
-      bullets.push({
-        x: canvas.width,
-        y: Math.random() * (canvas.height - 10),
-        width: 12,
-        height: 5,
-        speed: 3
+    function shoot() {
+      playerProjectiles.push({
+        x: player.x + player.width,
+        y: player.y + player.height / 2 - 2,
+        width: 10,
+        height: 4,
+        speed: 6
       });
     }
 
-    function updateBullets() {
-      bullets.forEach(b => {
-        b.x -= b.speed;
-      });
-
-      bullets = bullets.filter(b => b.x + b.width > 0);
-    }
-
-    function drawBullets() {
-      ctx.fillStyle = "red";
-      bullets.forEach(b => {
+    function drawPlayerBullets() {
+      ctx.fillStyle = "lime";
+      playerProjectiles.forEach(b => {
         ctx.fillRect(b.x, b.y, b.width, b.height);
       });
     }
 
-    function checkCollisions() {
-      bullets.forEach((b, i) => {
+    function updatePlayerBullets() {
+      playerProjectiles.forEach(b => { b.x += b.speed; });
+      playerProjectiles = playerProjectiles.filter(b => b.x < canvas.width);
+
+      // Collision with enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        for (let j = playerProjectiles.length - 1; j >= 0; j--) {
+          const e = enemies[i];
+          const b = playerProjectiles[j];
+          if (
+            b.x < e.x + e.width &&
+            b.x + b.width > e.x &&
+            b.y < e.y + e.height &&
+            b.y + b.height > e.y
+          ) {
+            enemies.splice(i, 1);
+            playerProjectiles.splice(j, 1);
+            score += 10;
+            document.getElementById("score").textContent = "Score: " + score;
+            break;
+          }
+        }
+      }
+    }
+
+    function spawnEnemy() {
+      enemies.push({
+        x: canvas.width,
+        y: Math.random() * (canvas.height - 30),
+        width: 30,
+        height: 30,
+        speed: 2
+      });
+    }
+
+    function drawEnemies() {
+      ctx.fillStyle = "red";
+      enemies.forEach(e => {
+        ctx.fillRect(e.x, e.y, e.width, e.height);
+      });
+    }
+
+    function updateEnemies() {
+      enemies.forEach(e => { e.x -= e.speed; });
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (e.x + e.width < 0) enemies.splice(i, 1); // off screen
+
         if (
-          b.x < spaceship.x + spaceship.width &&
-          b.x + b.width > spaceship.x &&
-          b.y < spaceship.y + spaceship.height &&
-          b.y + b.height > spaceship.y
+          e.x < player.x + player.width &&
+          e.x + e.width > player.x &&
+          e.y < player.y + player.height &&
+          e.y + e.height > player.y
         ) {
-          bullets.splice(i, 1);
+          enemies.splice(i, 1);
           lives--;
           if (lives <= 0) {
             gameOver = true;
             restartBtn.style.display = "block";
           }
         }
-      });
+      }
     }
 
     function drawUI() {
       ctx.fillStyle = "lime";
       ctx.font = "16px Arial";
-      ctx.fillText("Lives: " + lives, canvas.width - 80, 20);
+      ctx.fillText("Lives: " + lives, canvas.width - 100, 20);
     }
-
-    function updateScore() {
-      score++;
-      document.getElementById("score").innerText = "Score: " + score;
-    }
-
-    let frameCount = 0;
 
     function gameLoop() {
       if (gameOver) {
         ctx.fillStyle = "white";
-        ctx.font = "40px Arial";
+        ctx.font = "36px Arial";
         ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
         return;
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStars();
-      updateSpaceship();
-      updateBullets();
-      checkCollisions();
+      updatePlayer();
+      updateEnemies();
+      updatePlayerBullets();
 
-      drawSpaceship();
-      drawBullets();
+      drawPlayer();
+      drawEnemies();
+      drawPlayerBullets();
       drawUI();
 
-      frameCount++;
-      if (frameCount % 60 === 0) {
-        spawnBullet();
-      }
+      frame++;
 
-      if (frameCount % 10 === 0) {
-        updateScore();
+      if (frame % 60 === 0) {
+        spawnEnemy();
       }
 
       requestAnimationFrame(gameLoop);
     }
 
-    // Start the game
+    let frame = 0;
     spaceshipImg.onload = () => {
       resetGame();
     };
