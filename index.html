@@ -2,9 +2,9 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Dodger Final</title>
+  <title>Space Dodger - Final</title>
   <style>
-    html, body { margin: 0; padding: 0; overflow: hidden; background: black; touch-action: none; }
+    body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
     canvas { display: block; margin: auto; background: black; }
     #score {
       position: absolute; top: 10px; left: 10px;
@@ -19,32 +19,43 @@
       border: none; margin: 2px; width: 25px; height: 25px;
       cursor: pointer; border-radius: 5px;
     }
+    #restartBtn {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px; font-family: Arial;
+      padding: 10px 20px; background: white;
+      border: none; border-radius: 8px;
+      display: none; z-index: 20;
+    }
+    #weaponMenu {
+      position: absolute; top: 40%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #111; color: white;
+      padding: 20px; display: none; text-align: center;
+      border: 3px solid white; border-radius: 10px;
+    }
+    .weaponBtn {
+      margin: 10px; padding: 10px 20px;
+      font-size: 16px; font-family: Arial;
+      border: none; border-radius: 5px;
+      cursor: pointer; background: #333; color: white;
+    }
     #joystick {
       position: absolute; left: 15px; bottom: 15px;
       width: 90px; height: 90px; border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1); z-index: 5;
+      background: rgba(255,255,255,0.1); z-index: 5;
     }
     #joystickKnob {
       position: absolute; width: 40px; height: 40px;
       border-radius: 50%; background: rgba(255,255,255,0.5);
       top: 25px; left: 25px;
     }
-    #restartBtn {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 18px;
-      padding: 10px 20px;
-      background: white;
-      border: none;
-      border-radius: 8px;
-      display: none;
-      z-index: 20;
-      font-family: Arial;
-    }
   </style>
 </head>
 <body>
+
   <div id="score">Score: 0</div>
+
   <div id="skinPicker">
     Skin:
     <button class="skinBtn" style="background:red" onclick="setSkin('red')"></button>
@@ -52,22 +63,28 @@
     <button class="skinBtn" style="background:lime" onclick="setSkin('lime')"></button>
     <button class="skinBtn" style="background:yellow" onclick="setSkin('yellow')"></button>
   </div>
+
   <div id="joystick"><div id="joystickKnob"></div></div>
-  <button id="restartBtn" onclick="restartGame()">Restart Game</button>
+
+  <div id="weaponMenu">
+    <h2>Choose Your Weapon</h2>
+    <div id="buttons"></div>
+  </div>
+
+  <button id="restartBtn" onclick="startGame()">Restart Game</button>
   <canvas id="gameCanvas" width="800" height="500"></canvas>
 
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-let skin = localStorage.getItem("shipSkin") || "cyan";
-function setSkin(c) { skin = c; localStorage.setItem("shipSkin", c); }
-
 const scoreEl = document.getElementById("score");
 const restartBtn = document.getElementById("restartBtn");
+const weaponMenu = document.getElementById("weaponMenu");
+const weaponButtons = document.getElementById("buttons");
+
 let mouse = { x: canvas.width/2, y: canvas.height/2 };
 let keys = {}, bullets = [], enemies = [];
-let score = 0, frame = 0, level = 1;
-let gameRunning = true;
+let score = 0, frame = 0, level = 1, game = true;
 let touchDX = 0, touchDY = 0;
 
 document.addEventListener("keydown", e => keys[e.key] = true);
@@ -79,10 +96,9 @@ canvas.addEventListener("mousemove", e => {
 });
 canvas.addEventListener("click", () => shoot());
 
-// ☝ Joystick
-const joystick = document.getElementById("joystick");
+// Joystick
 const knob = document.getElementById("joystickKnob");
-joystick.addEventListener("touchmove", e => {
+document.getElementById("joystick").addEventListener("touchmove", e => {
   const rect = joystick.getBoundingClientRect();
   const t = e.touches[0];
   let dx = t.clientX - rect.left - 45;
@@ -95,23 +111,33 @@ joystick.addEventListener("touchmove", e => {
   touchDY = dy * 0.2;
   e.preventDefault();
 });
-joystick.addEventListener("touchend", () => {
-  knob.style.left = "25px";
-  knob.style.top = "25px";
+document.getElementById("joystick").addEventListener("touchend", () => {
+  knob.style.left = "25px"; knob.style.top = "25px";
   touchDX = 0; touchDY = 0;
 });
 
-// 🔫 Player
+// Skins
+let skin = localStorage.getItem("shipSkin") || "cyan";
+function setSkin(c) {
+  skin = c; localStorage.setItem("shipSkin", c);
+}
+
+// Weapons & Unlocks
+let weapon = localStorage.getItem("weapon") || "blaster";
+let weaponsUnlocked = JSON.parse(localStorage.getItem("weaponsUnlocked") || '["blaster"]');
+
+function unlockWeapon(w) {
+  if (!weaponsUnlocked.includes(w)) {
+    weaponsUnlocked.push(w);
+    localStorage.setItem('weaponsUnlocked', JSON.stringify(weaponsUnlocked));
+  }
+}
+
+// Player
 const player = {
   x: 100, y: canvas.height/2, w: 30, h: 20,
-  angle: 0, speed: 3, cooldown: 0,
-  weapon: localStorage.getItem("weapon") || "blaster"
+  angle: 0, speed: 3, cooldown: 0
 };
-
-function saveWeapon(upg) {
-  player.weapon = upg;
-  localStorage.setItem("weapon", upg);
-}
 
 function shoot() {
   const dx = mouse.x - (player.x+player.w/2);
@@ -119,14 +145,14 @@ function shoot() {
   const mag = Math.sqrt(dx*dx + dy*dy);
   if (!mag) return;
   const dirX = dx/mag, dirY = dy/mag;
-  if (player.weapon === "blaster") {
+  if (weapon === "blaster") {
     bullets.push({ x: player.x+player.w/2, y: player.y+player.h/2, dx: dirX*6, dy: dirY*6 });
-  } else if (player.weapon === "shotgun") {
+  } else if (weapon === "shotgun") {
     for (let a = -0.2; a <= 0.2; a += 0.2) {
       const angle = Math.atan2(dy, dx) + a;
       bullets.push({ x: player.x+player.w/2, y: player.y+player.h/2, dx: Math.cos(angle)*5, dy: Math.sin(angle)*5 });
     }
-  } else if (player.weapon === "laser") {
+  } else if (weapon === "laser") {
     bullets.push({ x: player.x+player.w/2, y: player.y+player.h/2, dx: dirX*10, dy: dirY*10 });
   }
 }
@@ -162,9 +188,8 @@ function spawnEnemy() {
   });
 }
 
-// 🧠 Game loop
 function update() {
-  if (!gameRunning) return;
+  if (!game) return;
 
   if (keys["w"]||keys["ArrowUp"]) player.y -= player.speed;
   if (keys["s"]||keys["ArrowDown"]) player.y += player.speed;
@@ -179,8 +204,7 @@ function update() {
   const dy = mouse.y - (player.y + player.h / 2);
   player.angle = Math.atan2(dy, dx);
   if ((keys[" "] || keys["Enter"]) && player.cooldown <= 0) {
-    shoot();
-    player.cooldown = 10;
+    shoot(); player.cooldown = 10;
   }
   if (player.cooldown > 0) player.cooldown--;
 
@@ -191,8 +215,7 @@ function update() {
     e.x -= e.speed;
     bullets.forEach((b, j) => {
       if (b.x > e.x-30 && b.x < e.x+30 && b.y > e.y-30 && b.y < e.y+30) {
-        e.hp--;
-        bullets.splice(j, 1);
+        e.hp--; bullets.splice(j, 1);
         if (e.hp <= 0) {
           score += 10;
           enemies.splice(enemies.indexOf(e), 1);
@@ -204,13 +227,13 @@ function update() {
       endGame();
     }
   });
-
   enemies = enemies.filter(e => e.x + 60 > 0);
 }
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.save(); ctx.translate(player.x + player.w/2, player.y + player.h/2);
+  ctx.save();
+  ctx.translate(player.x + player.w/2, player.y + player.h/2);
   ctx.rotate(player.angle);
   ctx.fillStyle = skin;
   ctx.beginPath();
@@ -219,41 +242,54 @@ function draw() {
 
   ctx.fillStyle = "lime";
   bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 2));
-
   enemies.forEach(e => enemyShape(e.x, e.y, e.type));
 
   scoreEl.textContent = "Score: " + score;
+}
+
+function endGame() {
+  game = false;
+  unlockWeapon("blaster");
+  if (score >= 50) unlockWeapon("shotgun");
+  if (score >= 100) unlockWeapon("laser");
+  localStorage.setItem("highScore", Math.max(score, localStorage.getItem("highScore") || 0));
+  showWeaponMenu();
+}
+
+function showWeaponMenu() {
+  weaponMenu.style.display = "block";
+  weaponButtons.innerHTML = "";
+  weaponsUnlocked.forEach(w => {
+    const btn = document.createElement("button");
+    btn.className = "weaponBtn";
+    btn.innerText = w[0].toUpperCase() + w.slice(1);
+    btn.onclick = () => {
+      weapon = w;
+      localStorage.setItem("weapon", w);
+      startGame();
+    };
+    weaponButtons.appendChild(btn);
+  });
+}
+
+function startGame() {
+  weaponMenu.style.display = "none";
+  restartBtn.style.display = "none";
+  bullets = []; enemies = []; score = 0; frame = 0; level = 1;
+  player.x = 100; player.y = canvas.height / 2;
+  game = true; loop();
 }
 
 function loop() {
   update(); draw(); frame++;
   if (frame % 60 === 0) spawnEnemy();
   if (score > level * 100) level++;
-  if (gameRunning) requestAnimationFrame(loop);
+  if (game) requestAnimationFrame(loop);
 }
 
-function endGame() {
-  gameRunning = false;
-  restartBtn.style.display = "block";
-}
-
-function restartGame() {
-  bullets = []; enemies = [];
-  score = 0; frame = 0; level = 1;
-  player.x = 100; player.y = canvas.height / 2;
-  gameRunning = true;
-  restartBtn.style.display = "none";
-  loop();
-}
-
-// ✅ Start game after loading
 window.onload = () => {
-  if (!localStorage.getItem("weapon")) {
-    localStorage.setItem("weapon", "blaster");
-  }
-  restartGame();
+  startGame();
 };
 </script>
-
 </body>
 </html>
