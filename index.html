@@ -2,17 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Dodger - Full Edition</title>
+  <title>Space Dodger Final</title>
   <style>
-    body {
-      margin: 0; overflow: hidden;
-      background: black; touch-action: none;
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      background: black;
-    }
+    html, body { margin: 0; padding: 0; overflow: hidden; background: black; touch-action: none; }
+    canvas { display: block; margin: auto; background: black; }
     #score {
       position: absolute; top: 10px; left: 10px;
       color: white; font-family: Arial; font-size: 20px;
@@ -46,6 +39,7 @@
       border-radius: 8px;
       display: none;
       z-index: 20;
+      font-family: Arial;
     }
   </style>
 </head>
@@ -61,3 +55,205 @@
   <div id="joystick"><div id="joystickKnob"></div></div>
   <button id="restartBtn" onclick="restartGame()">Restart Game</button>
   <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let skin = localStorage.getItem("shipSkin") || "cyan";
+function setSkin(c) { skin = c; localStorage.setItem("shipSkin", c); }
+
+const scoreEl = document.getElementById("score");
+const restartBtn = document.getElementById("restartBtn");
+let mouse = { x: canvas.width/2, y: canvas.height/2 };
+let keys = {}, bullets = [], enemies = [];
+let score = 0, frame = 0, level = 1;
+let gameRunning = true;
+let touchDX = 0, touchDY = 0;
+
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
+});
+canvas.addEventListener("click", () => shoot());
+
+// ☝ Joystick
+const joystick = document.getElementById("joystick");
+const knob = document.getElementById("joystickKnob");
+joystick.addEventListener("touchmove", e => {
+  const rect = joystick.getBoundingClientRect();
+  const t = e.touches[0];
+  let dx = t.clientX - rect.left - 45;
+  let dy = t.clientY - rect.top - 45;
+  dx = Math.max(-20, Math.min(20, dx));
+  dy = Math.max(-20, Math.min(20, dy));
+  knob.style.left = 25 + dx + "px";
+  knob.style.top = 25 + dy + "px";
+  touchDX = dx * 0.2;
+  touchDY = dy * 0.2;
+  e.preventDefault();
+});
+joystick.addEventListener("touchend", () => {
+  knob.style.left = "25px";
+  knob.style.top = "25px";
+  touchDX = 0; touchDY = 0;
+});
+
+// 🔫 Player
+const player = {
+  x: 100, y: canvas.height/2, w: 30, h: 20,
+  angle: 0, speed: 3, cooldown: 0,
+  weapon: localStorage.getItem("weapon") || "blaster"
+};
+
+function saveWeapon(upg) {
+  player.weapon = upg;
+  localStorage.setItem("weapon", upg);
+}
+
+function shoot() {
+  const dx = mouse.x - (player.x+player.w/2);
+  const dy = mouse.y - (player.y+player.h/2);
+  const mag = Math.sqrt(dx*dx + dy*dy);
+  if (!mag) return;
+  const dirX = dx/mag, dirY = dy/mag;
+  if (player.weapon === "blaster") {
+    bullets.push({ x: player.x+player.w/2, y: player.y+player.h/2, dx: dirX*6, dy: dirY*6 });
+  } else if (player.weapon === "shotgun") {
+    for (let a = -0.2; a <= 0.2; a += 0.2) {
+      const angle = Math.atan2(dy, dx) + a;
+      bullets.push({ x: player.x+player.w/2, y: player.y+player.h/2, dx: Math.cos(angle)*5, dy: Math.sin(angle)*5 });
+    }
+  } else if (player.weapon === "laser") {
+    bullets.push({ x: player.x+player.w/2, y: player.y+player.h/2, dx: dirX*10, dy: dirY*10 });
+  }
+}
+
+function enemyShape(x, y, type) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  switch(type) {
+    case 'fast':
+      ctx.fillStyle = "orange";
+      ctx.moveTo(0, -10); ctx.lineTo(10, 0); ctx.lineTo(0, 10); ctx.lineTo(-10, 0); break;
+    case 'boss':
+      ctx.fillStyle = "purple";
+      ctx.arc(0, 0, 40, 0, 2 * Math.PI); break;
+    default:
+      ctx.fillStyle = "red";
+      ctx.moveTo(0, -15); ctx.lineTo(10, 10); ctx.lineTo(-10, 10); break;
+  }
+  ctx.fill(); ctx.restore();
+}
+
+function spawnEnemy() {
+  const types = ["normal", "normal", "fast"];
+  if (score > 100) types.push("boss");
+  const type = types[Math.floor(Math.random()*types.length)];
+  enemies.push({
+    x: canvas.width + 50,
+    y: Math.random()*(canvas.height-40),
+    hp: type === "boss" ? 30 : type === "fast" ? 3 : 1,
+    speed: type === "boss" ? 1 : type === "fast" ? 5 : 2,
+    type
+  });
+}
+
+// 🧠 Game loop
+function update() {
+  if (!gameRunning) return;
+
+  if (keys["w"]||keys["ArrowUp"]) player.y -= player.speed;
+  if (keys["s"]||keys["ArrowDown"]) player.y += player.speed;
+  if (keys["a"]||keys["ArrowLeft"]) player.x -= player.speed;
+  if (keys["d"]||keys["ArrowRight"]) player.x += player.speed;
+  player.x += touchDX;
+  player.y += touchDY;
+  player.x = Math.max(0, Math.min(canvas.width-player.w, player.x));
+  player.y = Math.max(0, Math.min(canvas.height-player.h, player.y));
+
+  const dx = mouse.x - (player.x + player.w / 2);
+  const dy = mouse.y - (player.y + player.h / 2);
+  player.angle = Math.atan2(dy, dx);
+  if ((keys[" "] || keys["Enter"]) && player.cooldown <= 0) {
+    shoot();
+    player.cooldown = 10;
+  }
+  if (player.cooldown > 0) player.cooldown--;
+
+  bullets.forEach(b => { b.x += b.dx; b.y += b.dy; });
+  bullets = bullets.filter(b => b.x > 0 && b.x < canvas.width && b.y > 0 && b.y < canvas.height);
+
+  enemies.forEach(e => {
+    e.x -= e.speed;
+    bullets.forEach((b, j) => {
+      if (b.x > e.x-30 && b.x < e.x+30 && b.y > e.y-30 && b.y < e.y+30) {
+        e.hp--;
+        bullets.splice(j, 1);
+        if (e.hp <= 0) {
+          score += 10;
+          enemies.splice(enemies.indexOf(e), 1);
+        }
+      }
+    });
+    if (e.x < player.x + player.w && e.x + 20 > player.x &&
+        e.y < player.y + player.h && e.y + 20 > player.y) {
+      endGame();
+    }
+  });
+
+  enemies = enemies.filter(e => e.x + 60 > 0);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save(); ctx.translate(player.x + player.w/2, player.y + player.h/2);
+  ctx.rotate(player.angle);
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.moveTo(15, 0); ctx.lineTo(-10, -10); ctx.lineTo(-10, 10); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = "lime";
+  bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 2));
+
+  enemies.forEach(e => enemyShape(e.x, e.y, e.type));
+
+  scoreEl.textContent = "Score: " + score;
+}
+
+function loop() {
+  update(); draw(); frame++;
+  if (frame % 60 === 0) spawnEnemy();
+  if (score > level * 100) level++;
+  if (gameRunning) requestAnimationFrame(loop);
+}
+
+function endGame() {
+  gameRunning = false;
+  restartBtn.style.display = "block";
+}
+
+function restartGame() {
+  bullets = []; enemies = [];
+  score = 0; frame = 0; level = 1;
+  player.x = 100; player.y = canvas.height / 2;
+  gameRunning = true;
+  restartBtn.style.display = "none";
+  loop();
+}
+
+// ✅ Start game after loading
+window.onload = () => {
+  if (!localStorage.getItem("weapon")) {
+    localStorage.setItem("weapon", "blaster");
+  }
+  restartGame();
+};
+</script>
+
+</body>
+</html>
