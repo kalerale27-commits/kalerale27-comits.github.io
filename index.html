@@ -2,320 +2,257 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Dodger - Gun Upgrade Edition</title>
+  <title>Space Dodger - Mobile Edition</title>
   <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background-color: black;
-    }
-
-    canvas {
-      display: block;
-      margin: 0 auto;
-    }
-
+    body { margin: 0; overflow: hidden; background: black; touch-action: none; }
+    canvas { display: block; margin: auto; background: black; }
     #score {
-      color: white;
-      font-family: Arial;
-      font-size: 20px;
       position: absolute;
       top: 10px;
       left: 10px;
-    }
-
-    #upgradeMenu {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-      font-family: Arial;
-      z-index: 2;
-    }
-
-    #upgradeMenu h2 {
-      margin-top: 0;
-    }
-
-    .upgrade-button {
-      margin-top: 10px;
-      padding: 10px 20px;
-      font-size: 16px;
-      background: #222;
       color: white;
+      font-family: Arial;
+      font-size: 20px;
+    }
+    #skinPicker {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.8);
+      padding: 8px;
+      border-radius: 6px;
+      color: white;
+      z-index: 10;
+    }
+    .skinBtn {
+      background: white;
       border: none;
-      border-radius: 5px;
+      margin: 2px;
+      width: 25px;
+      height: 25px;
       cursor: pointer;
+    }
+    #joystick {
+      position: absolute;
+      left: 20px;
+      bottom: 20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      z-index: 5;
+    }
+    #joystickKnob {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.5);
+      top: 20px; left: 20px;
     }
   </style>
 </head>
 <body>
   <div id="score">Score: 0</div>
+  <div id="skinPicker">Skin: 
+    <button class="skinBtn" style="background:red" onclick="setSkin('red')"></button>
+    <button class="skinBtn" style="background:cyan" onclick="setSkin('cyan')"></button>
+    <button class="skinBtn" style="background:lime" onclick="setSkin('lime')"></button>
+    <button class="skinBtn" style="background:yellow" onclick="setSkin('yellow')"></button>
+  </div>
+  <div id="joystick"><div id="joystickKnob"></div></div>
   <canvas id="gameCanvas" width="800" height="500"></canvas>
 
-  <div id="upgradeMenu">
-    <h2>Upgrade Shop</h2>
-    <p>You scored <span id="finalScore">0</span> points</p>
-    <p>Select your weapon:</p>
-    <button class="upgrade-button" onclick="selectWeapon('basic')">🔫 Basic Blaster (Free)</button><br>
-    <button class="upgrade-button" onclick="selectWeapon('shotgun')">💥 Shotgun (20 points) <span id="shotgunStatus"></span></button><br>
-    <button class="upgrade-button" onclick="selectWeapon('laser')">🔥 Laser Gun (30 points) <span id="laserStatus"></span></button>
-  </div>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+let keys = {};
+let bullets = [], enemies = [];
+let score = 0, frame = 0;
+let joystickActive = false;
+let joystick = document.getElementById("joystick");
+let knob = document.getElementById("joystickKnob");
+let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+let skin = localStorage.getItem("shipSkin") || "cyan";
 
-    const spaceshipImg = new Image();
-    spaceshipImg.src = "spaceship.png";
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
+});
 
-    const keys = {};
-    window.addEventListener("keydown", e => keys[e.key] = true);
-    window.addEventListener("keyup", e => keys[e.key] = false);
+canvas.addEventListener("click", () => shoot());
 
-    let weapon = "basic";
-    let unlockedWeapons = [];
-    let score = 0;
-    let playerShots = [];
-    let enemies = [];
-    let stars = [];
-    let lives = 3;
-    let player;
-    let gameOver = false;
-    let frame = 0;
+joystick.addEventListener("touchstart", e => {
+  joystickActive = true;
+  e.preventDefault();
+});
+joystick.addEventListener("touchmove", e => {
+  const rect = joystick.getBoundingClientRect();
+  const touch = e.touches[0];
+  let dx = touch.clientX - rect.left - 40;
+  let dy = touch.clientY - rect.top - 40;
+  dx = Math.max(-20, Math.min(20, dx));
+  dy = Math.max(-20, Math.min(20, dy));
+  knob.style.left = 20 + dx + 'px';
+  knob.style.top = 20 + dy + 'px';
+  player.dx = dx * 0.2;
+  player.dy = dy * 0.2;
+});
+joystick.addEventListener("touchend", () => {
+  joystickActive = false;
+  player.dx = player.dy = 0;
+  knob.style.left = '20px';
+  knob.style.top = '20px';
+});
 
-    function saveData() {
-      const gameData = {
-        unlockedWeapons: unlockedWeapons,
-        selectedWeapon: weapon
-      };
-      localStorage.setItem("spaceDodgerData", JSON.stringify(gameData));
-    }
+function setSkin(color) {
+  skin = color;
+  localStorage.setItem("shipSkin", color);
+}
 
-    function loadData() {
-      const data = localStorage.getItem("spaceDodgerData");
-      if (data) {
-        const parsed = JSON.parse(data);
-        unlockedWeapons = parsed.unlockedWeapons || ["basic"];
-        weapon = parsed.selectedWeapon || "basic";
-      } else {
-        unlockedWeapons = ["basic"];
-        weapon = "basic";
-      }
-    }
+const player = {
+  x: 100, y: canvas.height / 2,
+  w: 30, h: 30,
+  speed: 3,
+  cooldown: 0,
+  dx: 0, dy: 0
+};
 
-    function resetGame() {
-      player = {
-        x: 50,
-        y: canvas.height / 2,
-        width: 40,
-        height: 40,
-        speed: 4,
-        canShoot: true,
-        shootCooldown: 300
-      };
+// Shooting
+function shoot() {
+  const dx = mouse.x - (player.x + player.w / 2);
+  const dy = mouse.y - (player.y + player.h / 2);
+  const mag = Math.hypot(dx, dy);
+  if (mag === 0) return;
+  bullets.push({
+    x: player.x + player.w/2,
+    y: player.y + player.h/2,
+    dx: dx / mag * 7,
+    dy: dy / mag * 7
+  });
+}
 
-      playerShots = [];
-      enemies = [];
+function updatePlayer() {
+  const speed = player.speed;
+  if (keys["w"] || keys["ArrowUp"]) player.y -= speed;
+  if (keys["s"] || keys["ArrowDown"]) player.y += speed;
+  if (keys["a"] || keys["ArrowLeft"]) player.x -= speed;
+  if (keys["d"] || keys["ArrowRight"]) player.x += speed;
+  player.x += player.dx;
+  player.y += player.dy;
 
-      stars = Array.from({ length: 100 }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        size: Math.random() * 2,
-        speed: 0.5 + Math.random()
-      }));
+  player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+  player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
 
-      gameOver = false;
-      frame = 0;
-      score = 0;
-      lives = 3;
+  if ((keys[" "] || keys["Enter"]) && player.cooldown <= 0) {
+    shoot();
+    player.cooldown = 15;
+  }
+  if (player.cooldown > 0) player.cooldown--;
+}
 
-      document.getElementById("score").textContent = "Score: " + score;
-      document.getElementById("upgradeMenu").style.display = "none";
+// Bullet Logic
+function updateBullets() {
+  bullets.forEach(b => {
+    b.x += b.dx;
+    b.y += b.dy;
+  });
+  bullets = bullets.filter(b => b.x > 0 && b.x < canvas.width && b.y > 0 && b.y < canvas.height);
+}
 
-      requestAnimationFrame(gameLoop);
-    }
+// Enemies
+function spawnEnemy() {
+  let level = Math.floor(score / 100) + 1;
+  const type = Math.random() < 0.5 ? 'slow' : 'fast';
+  enemies.push({
+    x: canvas.width + 50,
+    y: Math.random() * (canvas.height - 50),
+    w: type === 'slow' ? 40 : 30,
+    h: 30,
+    type,
+    hp: type === 'slow' ? 3 * level : 2 * level,
+    speed: type === 'slow' ? 1.5 : 3 + 0.5 * level
+  });
+}
 
-    function drawStars() {
-      ctx.fillStyle = "white";
-      stars.forEach(star => {
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-        ctx.fill();
-        star.x -= star.speed;
-        if (star.x < 0) {
-          star.x = canvas.width;
-          star.y = Math.random() * canvas.height;
-        }
-      });
-    }
+function drawEnemies() {
+  enemies.forEach(e => {
+    ctx.fillStyle = e.type === "slow" ? "red" : "orange";
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+  });
+}
 
-    function updatePlayer() {
-      if (keys["ArrowUp"] || keys["w"]) player.y -= player.speed;
-      if (keys["ArrowDown"] || keys["s"]) player.y += player.speed;
-      if (keys["ArrowLeft"] || keys["a"]) player.x -= player.speed;
-      if (keys["ArrowRight"] || keys["d"]) player.x += player.speed;
+function updateEnemies() {
+  enemies.forEach(e => {
+    e.x -= e.speed;
 
-      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
-      player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
-
-      if ((keys[" "] || keys["Spacebar"]) && player.canShoot) {
-        shoot();
-        player.canShoot = false;
-        setTimeout(() => { player.canShoot = true; }, player.shootCooldown);
-      }
-    }
-
-    function drawPlayer() {
-      ctx.drawImage(spaceshipImg, player.x, player.y, player.width, player.height);
-    }
-
-    function shoot() {
-      switch (weapon) {
-        case "basic":
-          playerShots.push(createShot(player.x + player.width, player.y + player.height / 2 - 2, 10, 4, 6));
-          break;
-        case "shotgun":
-          for (let i = -1; i <= 1; i++) {
-            playerShots.push(createShot(player.x + player.width, player.y + player.height / 2 - 2 + i * 5, 10, 4, 6));
-          }
-          break;
-        case "laser":
-          playerShots.push(createShot(player.x + player.width, player.y + player.height / 2 - 1, 14, 2, 10, "cyan"));
-          break;
-      }
-    }
-
-    function createShot(x, y, w, h, speed, color = "lime") {
-      return { x, y, width: w, height: h, speed, color };
-    }
-
-    function updateShots() {
-      playerShots.forEach(s => s.x += s.speed);
-      playerShots = playerShots.filter(s => s.x < canvas.width);
-
-      enemies.forEach((enemy, ei) => {
-        playerShots.forEach((s, si) => {
-          if (
-            s.x < enemy.x + enemy.width &&
-            s.x + s.width > enemy.x &&
-            s.y < enemy.y + enemy.height &&
-            s.y + s.height > enemy.y
-          ) {
-            enemies.splice(ei, 1);
-            playerShots.splice(si, 1);
-            score += 10;
-            document.getElementById("score").textContent = "Score: " + score;
-          }
-        });
-      });
-    }
-
-    function drawShots() {
-      playerShots.forEach(s => {
-        ctx.fillStyle = s.color;
-        ctx.fillRect(s.x, s.y, s.width, s.height);
-      });
-    }
-
-    function spawnEnemy() {
-      enemies.push({
-        x: canvas.width,
-        y: Math.random() * (canvas.height - 30),
-        width: 30,
-        height: 30,
-        speed: 2
-      });
-    }
-
-    function updateEnemies() {
-      enemies.forEach(e => e.x -= e.speed);
-
-      for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i];
-        if (e.x + e.width < 0) enemies.splice(i, 1);
-
-        if (
-          e.x < player.x + player.width &&
-          e.x + e.width > player.x &&
-          e.y < player.y + player.height &&
-          e.y + e.height > player.y
-        ) {
-          enemies.splice(i, 1);
-          lives--;
-          if (lives <= 0) {
-            updateUpgradeMenu();
-          }
+    bullets.forEach((b, j) => {
+      if (b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+        e.hp--;
+        bullets.splice(j, 1);
+        if (e.hp <= 0) {
+          score += 10;
+          enemies.splice(enemies.indexOf(e), 1);
         }
       }
+    });
+
+    if (
+      e.x < player.x + player.w &&
+      e.x + e.w > player.x &&
+      e.y < player.y + player.h &&
+      e.y + e.h > player.y
+    ) {
+      alert("Game Over! Score: " + score);
+      location.reload();
     }
+  });
+  enemies = enemies.filter(e => e.x + e.w > 0);
+}
 
-    function drawEnemies() {
-      ctx.fillStyle = "red";
-      enemies.forEach(e => {
-        ctx.fillRect(e.x, e.y, e.width, e.height);
-      });
-    }
+function drawPlayer() {
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.moveTo(player.x + 20, player.y);
+  ctx.lineTo(player.x, player.y + 10);
+  ctx.lineTo(player.x, player.y - 10);
+  ctx.closePath();
+  ctx.fill();
+}
 
-    function drawUI() {
-      ctx.fillStyle = "lime";
-      ctx.font = "16px Arial";
-      ctx.fillText("Lives: " + lives, canvas.width - 100, 20);
-    }
+function drawBullets() {
+  ctx.fillStyle = "lime";
+  bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 2));
+}
 
-    function updateUpgradeMenu() {
-      gameOver = true;
-      document.getElementById("finalScore").textContent = score;
-      document.getElementById("shotgunStatus").textContent = unlockedWeapons.includes("shotgun") ? "✅ Unlocked" : "";
-      document.getElementById("laserStatus").textContent = unlockedWeapons.includes("laser") ? "✅ Unlocked" : "";
-      document.getElementById("upgradeMenu").style.display = "block";
-    }
+function drawUI() {
+  document.getElementById("score").textContent = `Score: ${score}`;
+}
 
-    function selectWeapon(selected) {
-      if (selected === "shotgun" && !unlockedWeapons.includes("shotgun")) {
-        if (score < 20) return alert("Not enough points!");
-        unlockedWeapons.push("shotgun");
-      }
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updatePlayer();
+  updateBullets();
+  updateEnemies();
 
-      if (selected === "laser" && !unlockedWeapons.includes("laser")) {
-        if (score < 30) return alert("Not enough points!");
-        unlockedWeapons.push("laser");
-      }
+  drawPlayer();
+  drawBullets();
+  drawEnemies();
+  drawUI();
 
-      weapon = selected;
-      saveData();
-      resetGame();
-    }
+  if (frame % 60 === 0) {
+    spawnEnemy();
+  }
 
-    function gameLoop() {
-      if (gameOver) return;
+  frame++;
+  requestAnimationFrame(gameLoop);
+}
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawStars();
-      updatePlayer();
-      updateShots();
-      updateEnemies();
-
-      drawPlayer();
-      drawShots();
-      drawEnemies();
-      drawUI();
-
-      frame++;
-      if (frame % 60 === 0) spawnEnemy();
-
-      requestAnimationFrame(gameLoop);
-    }
-
-    spaceshipImg.onload = () => {
-      loadData();
-      resetGame();
-    };
-  </script>
+gameLoop();
+</script>
 </body>
 </html>
