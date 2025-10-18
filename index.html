@@ -2,257 +2,62 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Space Dodger - Mobile Edition</title>
+  <title>Space Dodger - Full Edition</title>
   <style>
-    body { margin: 0; overflow: hidden; background: black; touch-action: none; }
-    canvas { display: block; margin: auto; background: black; }
+    body {
+      margin: 0; overflow: hidden;
+      background: black; touch-action: none;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: black;
+    }
     #score {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-family: Arial;
-      font-size: 20px;
+      position: absolute; top: 10px; left: 10px;
+      color: white; font-family: Arial; font-size: 20px;
     }
     #skinPicker {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(0,0,0,0.8);
-      padding: 8px;
-      border-radius: 6px;
-      color: white;
-      z-index: 10;
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(0,0,0,0.8); padding: 8px;
+      border-radius: 6px; color: white; z-index: 10;
     }
     .skinBtn {
-      background: white;
-      border: none;
-      margin: 2px;
-      width: 25px;
-      height: 25px;
-      cursor: pointer;
+      border: none; margin: 2px; width: 25px; height: 25px;
+      cursor: pointer; border-radius: 5px;
     }
     #joystick {
-      position: absolute;
-      left: 20px;
-      bottom: 20px;
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
-      z-index: 5;
+      position: absolute; left: 15px; bottom: 15px;
+      width: 90px; height: 90px; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1); z-index: 5;
     }
     #joystickKnob {
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.5);
-      top: 20px; left: 20px;
+      position: absolute; width: 40px; height: 40px;
+      border-radius: 50%; background: rgba(255,255,255,0.5);
+      top: 25px; left: 25px;
+    }
+    #restartBtn {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      padding: 10px 20px;
+      background: white;
+      border: none;
+      border-radius: 8px;
+      display: none;
+      z-index: 20;
     }
   </style>
 </head>
 <body>
   <div id="score">Score: 0</div>
-  <div id="skinPicker">Skin: 
+  <div id="skinPicker">
+    Skin:
     <button class="skinBtn" style="background:red" onclick="setSkin('red')"></button>
     <button class="skinBtn" style="background:cyan" onclick="setSkin('cyan')"></button>
     <button class="skinBtn" style="background:lime" onclick="setSkin('lime')"></button>
     <button class="skinBtn" style="background:yellow" onclick="setSkin('yellow')"></button>
   </div>
   <div id="joystick"><div id="joystickKnob"></div></div>
+  <button id="restartBtn" onclick="restartGame()">Restart Game</button>
   <canvas id="gameCanvas" width="800" height="500"></canvas>
-
-<script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-
-let keys = {};
-let bullets = [], enemies = [];
-let score = 0, frame = 0;
-let joystickActive = false;
-let joystick = document.getElementById("joystick");
-let knob = document.getElementById("joystickKnob");
-let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
-let skin = localStorage.getItem("shipSkin") || "cyan";
-
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-canvas.addEventListener("mousemove", e => {
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = e.clientX - rect.left;
-  mouse.y = e.clientY - rect.top;
-});
-
-canvas.addEventListener("click", () => shoot());
-
-joystick.addEventListener("touchstart", e => {
-  joystickActive = true;
-  e.preventDefault();
-});
-joystick.addEventListener("touchmove", e => {
-  const rect = joystick.getBoundingClientRect();
-  const touch = e.touches[0];
-  let dx = touch.clientX - rect.left - 40;
-  let dy = touch.clientY - rect.top - 40;
-  dx = Math.max(-20, Math.min(20, dx));
-  dy = Math.max(-20, Math.min(20, dy));
-  knob.style.left = 20 + dx + 'px';
-  knob.style.top = 20 + dy + 'px';
-  player.dx = dx * 0.2;
-  player.dy = dy * 0.2;
-});
-joystick.addEventListener("touchend", () => {
-  joystickActive = false;
-  player.dx = player.dy = 0;
-  knob.style.left = '20px';
-  knob.style.top = '20px';
-});
-
-function setSkin(color) {
-  skin = color;
-  localStorage.setItem("shipSkin", color);
-}
-
-const player = {
-  x: 100, y: canvas.height / 2,
-  w: 30, h: 30,
-  speed: 3,
-  cooldown: 0,
-  dx: 0, dy: 0
-};
-
-// Shooting
-function shoot() {
-  const dx = mouse.x - (player.x + player.w / 2);
-  const dy = mouse.y - (player.y + player.h / 2);
-  const mag = Math.hypot(dx, dy);
-  if (mag === 0) return;
-  bullets.push({
-    x: player.x + player.w/2,
-    y: player.y + player.h/2,
-    dx: dx / mag * 7,
-    dy: dy / mag * 7
-  });
-}
-
-function updatePlayer() {
-  const speed = player.speed;
-  if (keys["w"] || keys["ArrowUp"]) player.y -= speed;
-  if (keys["s"] || keys["ArrowDown"]) player.y += speed;
-  if (keys["a"] || keys["ArrowLeft"]) player.x -= speed;
-  if (keys["d"] || keys["ArrowRight"]) player.x += speed;
-  player.x += player.dx;
-  player.y += player.dy;
-
-  player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
-  player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
-
-  if ((keys[" "] || keys["Enter"]) && player.cooldown <= 0) {
-    shoot();
-    player.cooldown = 15;
-  }
-  if (player.cooldown > 0) player.cooldown--;
-}
-
-// Bullet Logic
-function updateBullets() {
-  bullets.forEach(b => {
-    b.x += b.dx;
-    b.y += b.dy;
-  });
-  bullets = bullets.filter(b => b.x > 0 && b.x < canvas.width && b.y > 0 && b.y < canvas.height);
-}
-
-// Enemies
-function spawnEnemy() {
-  let level = Math.floor(score / 100) + 1;
-  const type = Math.random() < 0.5 ? 'slow' : 'fast';
-  enemies.push({
-    x: canvas.width + 50,
-    y: Math.random() * (canvas.height - 50),
-    w: type === 'slow' ? 40 : 30,
-    h: 30,
-    type,
-    hp: type === 'slow' ? 3 * level : 2 * level,
-    speed: type === 'slow' ? 1.5 : 3 + 0.5 * level
-  });
-}
-
-function drawEnemies() {
-  enemies.forEach(e => {
-    ctx.fillStyle = e.type === "slow" ? "red" : "orange";
-    ctx.fillRect(e.x, e.y, e.w, e.h);
-  });
-}
-
-function updateEnemies() {
-  enemies.forEach(e => {
-    e.x -= e.speed;
-
-    bullets.forEach((b, j) => {
-      if (b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
-        e.hp--;
-        bullets.splice(j, 1);
-        if (e.hp <= 0) {
-          score += 10;
-          enemies.splice(enemies.indexOf(e), 1);
-        }
-      }
-    });
-
-    if (
-      e.x < player.x + player.w &&
-      e.x + e.w > player.x &&
-      e.y < player.y + player.h &&
-      e.y + e.h > player.y
-    ) {
-      alert("Game Over! Score: " + score);
-      location.reload();
-    }
-  });
-  enemies = enemies.filter(e => e.x + e.w > 0);
-}
-
-function drawPlayer() {
-  ctx.fillStyle = skin;
-  ctx.beginPath();
-  ctx.moveTo(player.x + 20, player.y);
-  ctx.lineTo(player.x, player.y + 10);
-  ctx.lineTo(player.x, player.y - 10);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawBullets() {
-  ctx.fillStyle = "lime";
-  bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 2));
-}
-
-function drawUI() {
-  document.getElementById("score").textContent = `Score: ${score}`;
-}
-
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  updatePlayer();
-  updateBullets();
-  updateEnemies();
-
-  drawPlayer();
-  drawBullets();
-  drawEnemies();
-  drawUI();
-
-  if (frame % 60 === 0) {
-    spawnEnemy();
-  }
-
-  frame++;
-  requestAnimationFrame(gameLoop);
-}
-
-gameLoop();
-</script>
-</body>
-</html>
